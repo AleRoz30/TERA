@@ -249,11 +249,23 @@ cv.addEventListener("mousemove",ev=>{
 /* ---------- init ---------- */
 (async function(){
   resize();
-  const maps=await dbGetAll();
-  if(maps[0]) state.map=maps[0];
-  else{
-    state.map={...newMap(),...LACHINYAN_TEMPLATE};
-    await dbPut(state.map);
+
+  const maps = await dbGetAll();
+
+  if (maps.length === 0) {
+    // ⬅️ КЛЮЧЕВОЕ РЕШЕНИЕ (вариант 2)
+    const m = {
+      ...structuredClone(LACHINYAN_TEMPLATE),
+      id: uid(),
+      created_at: nowIso(),
+      updated_at: nowIso()
+    };
+    state.map = m;
+    await dbPut(m);
+  } else {
+    state.map = maps[0];
   }
+
   draw();
 })();
+
