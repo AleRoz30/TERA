@@ -247,13 +247,14 @@ cv.addEventListener("mousemove",ev=>{
 });
 
 /* ---------- init ---------- */
-(async function(){
+
+(async function () {
   resize();
 
   const maps = await dbGetAll();
 
   if (maps.length === 0) {
-    // ⬅️ КЛЮЧЕВОЕ РЕШЕНИЕ (вариант 2)
+    // Вариант 2: старт с шаблона Лачиняна
     const m = {
       ...structuredClone(LACHINYAN_TEMPLATE),
       id: uid(),
@@ -268,4 +269,5 @@ cv.addEventListener("mousemove",ev=>{
 
   draw();
 })();
+
 
