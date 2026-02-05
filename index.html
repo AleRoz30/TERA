@@ -1,0 +1,1354 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TERA MVP (single-file)</title>
+  <style>
+    :root{
+      --bg:#0f1216; --panel:#141a21; --panel2:#10151b; --text:#e7edf5; --muted:#9aa6b2;
+      --line: rgba(154,166,178,.22); --line2: rgba(154,166,178,.35);
+      --accent: rgba(200,220,255,.85);
+    }
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    body{margin:0;background:var(--bg);color:var(--text);height:100vh;display:flex}
+    #left{width:340px;min-width:340px;background:var(--panel);border-right:1px solid rgba(255,255,255,.06);padding:12px;overflow:auto}
+    #main{flex:1;display:flex;flex-direction:column}
+    #top{display:flex;gap:10px;align-items:center;padding:10px 12px;background:var(--panel2);border-bottom:1px solid rgba(255,255,255,.06)}
+    #canvasWrap{flex:1;position:relative}
+    canvas{width:100%;height:100%;display:block}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .group{padding:10px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.02);margin-bottom:10px}
+    .group h3{margin:0 0 8px 0;font-size:14px;color:var(--muted);font-weight:600;letter-spacing:.2px}
+    label{font-size:12px;color:var(--muted)}
+    input[type="text"], textarea, select{
+      width:100%; background:#0c1015; color:var(--text); border:1px solid rgba(255,255,255,.1);
+      border-radius:10px; padding:8px 10px; outline:none
+    }
+    textarea{min-height:64px;resize:vertical}
+    button{
+      background:#0c1015;color:var(--text);border:1px solid rgba(255,255,255,.12);
+      border-radius:10px;padding:8px 10px;cursor:pointer
+    }
+    button:hover{border-color:rgba(255,255,255,.22)}
+    button.primary{background:rgba(200,220,255,.12);border-color:rgba(200,220,255,.25)}
+    button.danger{background:rgba(255,120,120,.10);border-color:rgba(255,120,120,.22)}
+    .pill{display:inline-flex;gap:6px;align-items:center;padding:4px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.12);color:var(--muted);font-size:12px}
+    .small{font-size:12px;color:var(--muted)}
+    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace}
+    hr{border:none;border-top:1px solid rgba(255,255,255,.08);margin:10px 0}
+    .hint{font-size:12px;color:var(--muted);line-height:1.35;white-space:pre-line}
+    .list{display:flex;flex-direction:column;gap:6px}
+    .item{padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02)}
+    .item strong{font-size:13px}
+    .item .meta{margin-top:4px;font-size:12px;color:var(--muted)}
+    .toast{position:absolute;left:12px;bottom:12px;background:rgba(15,18,22,.92);border:1px solid rgba(255,255,255,.12);
+      padding:8px 10px;border-radius:10px;color:var(--text);font-size:12px;max-width:560px}
+    .k{color:var(--muted)}
+    a{color:var(--accent);text-decoration:none}
+    a:hover{text-decoration:underline}
+  </style>
+</head>
+
+<body>
+  <aside id="left">
+    <div class="group">
+      <h3>Карта</h3>
+
+      <div class="row" style="margin-bottom:8px">
+        <select id="mapPicker" style="flex:1"></select>
+        <button id="btnNewMap">Новая</button>
+      </div>
+
+      <div class="row" style="margin-bottom:8px">
+        <button id="btnNewFromTemplate">Новая из шаблона</button>
+        <button id="btnPure">Чистый режим</button>
+      </div>
+
+      <div class="row" style="margin-bottom:8px">
+        <button id="btnDeleteMap" class="danger">Удалить карту</button>
+      </div>
+
+      <label>Название</label>
+      <input id="mapTitle" type="text" placeholder="TERA карта" />
+
+      <div class="row" style="margin-top:8px">
+        <span class="pill">Режим: <span id="modeLbl" class="mono">12</span></span>
+        <span class="pill">Слой: <span id="layerLbl" class="mono">all</span></span>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="btnMode4">4</button>
+        <button id="btnMode12" class="primary">12</button>
+        <button id="btnMode36">36</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnLayerAll">all</button>
+        <button id="btnLayerState">state</button>
+        <button id="btnLayerInfo">info</button>
+        <button id="btnLayerAction">action</button>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button id="btnSave" class="primary">Сохранить</button>
+        <button id="btnFork">Форк</button>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <button id="btnExport">Экспорт .json</button>
+        <label class="pill" style="cursor:pointer">
+          Импорт
+          <input id="fileImport" type="file" accept=".json,application/json" style="display:none" />
+        </label>
+      </div>
+
+      <div class="hint" style="margin-top:10px">
+Принцип:
+— поле видно всем одинаково
+— нет рекомендаций, ранжирования, автосвязей
+— ответственность за структуру у пользователя
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Действия</h3>
+      <div class="row">
+        <button id="btnAddNode" class="primary">+ Node</button>
+        <button id="btnLinkMode">Связать</button>
+        <button id="btnShowEdges">Связи</button>
+        <button id="btnOnboarding">Онбординг</button>
+      </div>
+      <div class="small" style="margin-top:8px">
+        <span class="k">Связать:</span> выбери 1-й узел → «Связать» → выбери 2-й узел.
+      </div>
+      <div class="small" style="margin-top:4px">
+        <span class="k">Удалить связь:</span> включи показ связей → клик по линии → подтверждение.
+      </div>
+      <div class="small" style="margin-top:4px">
+        <span class="k">Перемещение:</span> перетащи узел мышью. <span class="k">Зум:</span> колесо. <span class="k">Пан:</span> drag по пустому месту.
+      </div>
+    </div>
+
+    <div class="group" id="editorGroup" style="display:none">
+      <h3>Node</h3>
+      <div class="row" style="justify-content:space-between">
+        <span class="pill"><span id="nodeIdLbl" class="mono"></span></span>
+        <button id="btnDeleteNode" class="danger">Удалить</button>
+      </div>
+
+      <label style="margin-top:8px;display:block">Название</label>
+      <input id="nTitle" type="text" />
+
+      <label style="margin-top:8px;display:block">Synopsis (1–2 строки)</label>
+      <textarea id="nSynopsis"></textarea>
+
+      <div class="row" style="margin-top:8px">
+        <div style="flex:1;min-width:120px">
+          <label>Функция</label>
+          <select id="nFunc"></select>
+        </div>
+        <div style="flex:1;min-width:120px">
+          <label>Слой (36)</label>
+          <select id="nLayer">
+            <option value="">—</option>
+            <option value="state">state</option>
+            <option value="info">info</option>
+            <option value="action">action</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px">
+        <div style="flex:1;min-width:120px">
+          <label>Evidence</label>
+          <select id="nEvidence">
+            <option value="hypothesis">hypothesis</option>
+            <option value="claim">claim</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:120px">
+          <label>Сомнение</label>
+          <select id="nUnc">
+            <option value="false">нет</option>
+            <option value="true">да</option>
+          </select>
+        </div>
+      </div>
+
+      <hr/>
+
+      <h3 style="margin-top:0">Источники (окна просмотра)</h3>
+      <div class="list" id="sourcesList"></div>
+
+      <div class="row" style="margin-top:8px">
+        <input id="sUrl" type="text" placeholder="https://..." />
+      </div>
+      <div class="row" style="margin-top:6px">
+        <select id="sFmt" style="flex:1;min-width:120px">
+          <option value="text">text</option>
+          <option value="video">video</option>
+          <option value="course">course</option>
+          <option value="site">site</option>
+          <option value="other">other</option>
+        </select>
+        <input id="sNote" type="text" style="flex:2;min-width:160px" placeholder="note (необязательно)" />
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnAddSource" class="primary">Добавить источник</button>
+      </div>
+
+      <hr/>
+      <div class="row">
+        <button id="btnEdgeHistory">История связей</button>
+      </div>
+    </div>
+
+    <div class="group">
+      <h3>Легенда</h3>
+      <div id="legend" class="small"></div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="top" class="row">
+      <span class="pill">🧭 TERA MVP</span>
+      <span class="pill">режим <span id="topMode" class="mono">12</span></span>
+      <span class="pill">слой <span id="topLayer" class="mono">all</span></span>
+      <span class="pill">узлов <span id="topNodes" class="mono">0</span></span>
+      <span class="pill">связей <span id="topEdges" class="mono">0</span></span>
+      <span class="pill">выбран <span id="topSel" class="mono">—</span></span>
+    </div>
+
+    <div id="canvasWrap">
+      <canvas id="cv"></canvas>
+
+      <div id="toast" class="toast" style="display:none"></div>
+
+      <div id="onb" class="toast" style="display:none; left:auto; right:12px; bottom:auto; top:12px; max-width:420px">
+        <div style="font-weight:700;margin-bottom:6px">Онбординг TERA (10 минут)</div>
+        <div id="onbText" class="hint"></div>
+        <div class="row" style="margin-top:10px; justify-content:space-between">
+          <button id="onbPrev">←</button>
+          <span class="pill">шаг <span id="onbStep" class="mono">1</span>/5</span>
+          <button id="onbNext" class="primary">→</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button id="onbClose">Закрыть</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+<script type="module">
+import { TERA_GUARD } from "./tera_guard.js";
+
+/* ==============================
+   Helpers
+============================== */
+const nowIso = () => new Date().toISOString();
+const uid = () => (crypto?.randomUUID ? crypto.randomUUID() : ("id-"+Math.random().toString(16).slice(2)+"-"+Date.now()));
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+function el(id){ return document.getElementById(id); }
+function deepClone(x){ return JSON.parse(JSON.stringify(x)); }
+function safeParseJson(text){
+  try{ return {ok:true, data: JSON.parse(text)}; }catch(e){ return {ok:false, err:e}; }
+}
+function toast(msg, ms=1800){
+  const t = el("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(()=>t.style.display="none", ms);
+}
+
+/* ==============================
+   IndexedDB storage
+============================== */
+const DB_NAME = "tera_mvp_db";
+const DB_VER = 1;
+const STORE = "maps";
+
+function openDB(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, DB_VER);
+    req.onupgradeneeded = ()=>{
+      const db = req.result;
+      if(!db.objectStoreNames.contains(STORE)){
+        db.createObjectStore(STORE, { keyPath: "id" });
+      }
+    };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+function txDone(tx){
+  return new Promise((resolve, reject)=>{
+    tx.oncomplete = ()=>resolve(true);
+    tx.onerror = ()=>reject(tx.error);
+    tx.onabort = ()=>reject(tx.error);
+  });
+}
+async function dbPutMap(map){
+  const db = await openDB();
+  const tx = db.transaction(STORE, "readwrite");
+  tx.objectStore(STORE).put(map);
+  await txDone(tx);
+}
+async function dbGetMap(id){
+  const db = await openDB();
+  const tx = db.transaction(STORE, "readonly");
+  const store = tx.objectStore(STORE);
+  const req = store.get(id);
+  const val = await new Promise((resolve, reject)=>{
+    req.onsuccess = ()=>resolve(req.result || null);
+    req.onerror = ()=>reject(req.error);
+  });
+  await txDone(tx);
+  return val;
+}
+async function dbListMaps(){
+  const db = await openDB();
+  const tx = db.transaction(STORE, "readonly");
+  const store = tx.objectStore(STORE);
+  const req = store.getAll();
+  const all = await new Promise((resolve, reject)=>{
+    req.onsuccess = ()=>resolve(req.result || []);
+    req.onerror = ()=>reject(req.error);
+  });
+  await txDone(tx);
+  all.sort((a,b)=>String(b.updated_at||"").localeCompare(String(a.updated_at||"")));
+  return all;
+}
+async function dbDeleteMap(id){
+  const db = await openDB();
+  const tx = db.transaction(STORE, "readwrite");
+  tx.objectStore(STORE).delete(id);
+  await txDone(tx);
+}
+
+/* ==============================
+   Core model
+============================== */
+const FUNCTION_NAMES_12 = [
+  "1 Импульс",
+  "2 Ввод / вход",
+  "3 Контакт / сбор",
+  "4 Различение",
+  "5 Формирование",
+  "6 Связность",
+  "7 Конфликт / границы",
+  "8 Согласование",
+  "9 Реализация",
+  "10 Контроль",
+  "11 Завершение",
+  "12 Осмысление"
+];
+
+const FUNCTION_GROUPS_4 = [
+  {name:"A Ориентация", funcs:[1,2,3]},
+  {name:"B Различение", funcs:[4,5,6]},
+  {name:"C Решение", funcs:[7,8,9]},
+  {name:"D Завершение", funcs:[10,11,12]}
+];
+
+const LAYERS = ["state","info","action"];
+const SOURCE_FORMATS = ["text","video","course","site","other"];
+
+const LAYER_MARK = { state:"◐", info:"◑", action:"◒" };
+const EVID_MARK = { hypothesis:"?", claim:"·" };
+
+function newMap(){
+  const t = nowIso();
+  return {
+    schema_version: "1.0",
+    id: uid(),
+    title: "TERA карта",
+    domain: "",
+    sector_mode: "12",
+    layer_mode: "all",
+    created_at: t,
+    updated_at: t,
+    created_by: "",
+    forked_from: null,
+    nodes: [],
+    edges: []
+  };
+}
+function updateMapMeta(){
+  state.map.updated_at = nowIso();
+}
+
+function makeNode({x=0,y=0, author=""}={}){
+  const t = nowIso();
+  return {
+    id: uid(),
+    title: "Новый узел",
+    synopsis: "",
+    function_id: 1,
+    layer: "",
+    evidence_level: "hypothesis",
+    uncertainty_mark: false,
+    tags: [],
+    sources: [],
+    position: {x,y},
+    created_at: t,
+    updated_at: t,
+    created_by: author || ""
+  };
+}
+
+function getNode(id){ return state.map.nodes.find(n=>n.id===id) || null; }
+function getEdge(id){ return state.map.edges.find(e=>e.id===id) || null; }
+
+function addEdge(a,b, author=""){
+  if(!a || !b || a===b) return;
+  const exists = state.map.edges.find(e => !e.deleted_at && ((e.a===a && e.b===b) || (e.a===b && e.b===a)));
+  if(exists) return;
+  state.map.edges.push({
+    id: uid(),
+    a, b,
+    edge_note: "",
+    history: [{action:"create", at: nowIso(), by: author || ""}],
+    deleted_at: null
+  });
+  updateMapMeta();
+}
+
+function deleteEdge(edgeId, author=""){
+  const e = getEdge(edgeId);
+  if(!e || e.deleted_at) return;
+  e.deleted_at = nowIso();
+  e.history.push({action:"delete", at: e.deleted_at, by: author || ""});
+  updateMapMeta();
+}
+
+/* ==============================
+   Templates
+============================== */
+function templateEmpty(){
+  const m = newMap();
+  m.title = "Пустая карта";
+  return m;
+}
+
+function templateStructure12(){
+  const m = newMap();
+  m.title = "Структура 12";
+  m.sector_mode = "12";
+  // размещаем по кругу, чтобы было удобно стартовать
+  const R = 260;
+  for(let i=1;i<=12;i++){
+    const ang = (-Math.PI/2) + (i-1)*(Math.PI*2/12);
+    const n = makeNode({x: Math.cos(ang)*R, y: Math.sin(ang)*R});
+    n.title = `Функция ${i}`;
+    n.function_id = i;
+    m.nodes.push(n);
+  }
+  return m;
+}
+
+function templateObserve4(){
+  const m = newMap();
+  m.title = "Наблюдение (4)";
+  m.sector_mode = "4";
+  return m;
+}
+
+function normalizeAfterLoad(){
+  state.map.schema_version = state.map.schema_version || "1.0";
+  state.map.sector_mode = String(state.map.sector_mode || "12");
+  state.map.layer_mode = state.map.layer_mode || "all";
+  state.map.nodes = Array.isArray(state.map.nodes) ? state.map.nodes : [];
+  state.map.edges = Array.isArray(state.map.edges) ? state.map.edges : [];
+  for(const n of state.map.nodes){
+    n.synopsis ??= "";
+    n.function_id = Number(n.function_id || 1);
+    n.layer ??= "";
+    n.evidence_level ??= "hypothesis";
+    n.uncertainty_mark = !!n.uncertainty_mark;
+    n.sources = Array.isArray(n.sources) ? n.sources : [];
+    n.position = n.position || {x:0,y:0};
+    n.updated_at ??= nowIso();
+    n.created_at ??= nowIso();
+  }
+  for(const e of state.map.edges){
+    e.history = Array.isArray(e.history) ? e.history : [];
+    e.deleted_at ??= null;
+  }
+
+  // TERA GUARD: проверка импортированных/сохранённых данных
+  TERA_GUARD.checkNodes(state.map.nodes);
+}
+
+/* ==============================
+   State
+============================== */
+const state = {
+  map: newMap(),
+  currentMapId: null,
+  selectedId: null,
+  linkMode: null,
+  showEdgesAlways: false,
+  view: { cx:0, cy:0, s:1 },
+  drag: { active:false, id:null, dx:0, dy:0 },
+  pureMode: false,
+};
+
+/* ==============================
+   UX helpers: map switch
+============================== */
+async function loadMapIntoState(map){
+  state.map = map;
+  state.currentMapId = map.id;
+  normalizeAfterLoad();
+  refreshUI();
+  draw();
+}
+
+async function refreshMapPicker(){
+  const picker = el("mapPicker");
+  const maps = await dbListMaps();
+  picker.innerHTML = "";
+  for(const m of maps){
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    const dt = m.updated_at ? m.updated_at.slice(0,19).replace("T"," ") : "";
+    opt.textContent = (m.title || "TERA карта") + (dt ? (" · " + dt) : "");
+    picker.appendChild(opt);
+  }
+  if(state.currentMapId){
+    picker.value = state.currentMapId;
+  }else if(maps[0]){
+    picker.value = maps[0].id;
+  }
+}
+
+/* ==============================
+   UI wiring
+============================== */
+const cv = el("cv");
+const ctx = cv.getContext("2d");
+
+function resize(){
+  const r = cv.getBoundingClientRect();
+  cv.width = Math.max(800, Math.floor(r.width * devicePixelRatio));
+  cv.height = Math.max(600, Math.floor(r.height * devicePixelRatio));
+  draw();
+}
+window.addEventListener("resize", resize);
+
+function setMode(m){
+  state.map.sector_mode = String(m);
+  if(state.map.sector_mode !== "36") state.map.layer_mode = "all";
+  updateMapMeta();
+  refreshUI();
+  draw();
+  dbPutMap(state.map);
+}
+
+function setLayer(l){
+  if(state.map.sector_mode !== "36"){
+    toast("Слои доступны в режиме 36");
+    return;
+  }
+  state.map.layer_mode = l;
+  updateMapMeta();
+  refreshUI();
+  draw();
+  dbPutMap(state.map);
+}
+
+el("btnMode4").onclick = ()=>setMode(4);
+el("btnMode12").onclick = ()=>setMode(12);
+el("btnMode36").onclick = ()=>setMode(36);
+
+el("btnLayerAll").onclick = ()=>setLayer("all");
+el("btnLayerState").onclick = ()=>setLayer("state");
+el("btnLayerInfo").onclick = ()=>setLayer("info");
+el("btnLayerAction").onclick = ()=>setLayer("action");
+
+el("btnPure").onclick = ()=>{
+  state.pureMode = !state.pureMode;
+  toast(state.pureMode ? "Чистый режим" : "Обычный режим");
+  refreshUI();
+  draw();
+};
+
+el("btnSave").onclick = async ()=>{
+  state.map.title = el("mapTitle").value.trim() || "TERA карта";
+  updateMapMeta();
+  await dbPutMap(state.map);
+  await refreshMapPicker();
+  toast("Сохранено");
+  refreshUI();
+};
+
+el("btnFork").onclick = async ()=>{
+  const author = prompt("Автор форка (необязательно):") || "";
+  const fork = deepClone(state.map);
+  fork.forked_from = { map_id: state.map.id, title: state.map.title };
+  fork.id = uid();
+  fork.created_at = nowIso();
+  fork.updated_at = nowIso();
+  fork.created_by = author;
+  state.selectedId = null;
+  state.linkMode = null;
+
+  await dbPutMap(fork);
+  await loadMapIntoState(fork);
+  await refreshMapPicker();
+  toast("Форк создан: новая карта");
+};
+
+el("btnExport").onclick = async ()=>{
+  state.map.title = el("mapTitle").value.trim() || state.map.title;
+  updateMapMeta();
+  await dbPutMap(state.map);
+  await refreshMapPicker();
+
+  const blob = new Blob([JSON.stringify(state.map, null, 2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.map.title || "tera_map").replace(/[^\w\-]+/g,"_") + ".tera.json";
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+};
+
+el("fileImport").addEventListener("change", async (ev)=>{
+  const f = ev.target.files?.[0];
+  if(!f) return;
+  const text = await f.text();
+  const p = safeParseJson(text);
+  if(!p.ok){ toast("Ошибка JSON"); return; }
+  let imported = p.data;
+  if(!imported || typeof imported !== "object"){ toast("Неверный файл"); return; }
+  imported.id = imported.id || uid();
+  imported.updated_at = nowIso();
+  imported.created_at = imported.created_at || nowIso();
+  // импорт НЕ затирает текущую, добавляет как отдельную
+  state.map = imported;
+  normalizeAfterLoad();
+
+  await dbPutMap(state.map);
+  await loadMapIntoState(state.map);
+  await refreshMapPicker();
+  toast("Импортировано как отдельная карта");
+  ev.target.value = "";
+});
+
+el("btnNewFromTemplate").onclick = async ()=>{
+  const choice = prompt(
+`Выбери шаблон:
+1 — Пустая карта
+2 — Структура 12
+3 — Наблюдение 4`
+  );
+
+  let m = null;
+  if(choice==="1") m = templateEmpty();
+  if(choice==="2") m = templateStructure12();
+  if(choice==="3") m = templateObserve4();
+  if(!m) return;
+
+  await dbPutMap(m);
+  await loadMapIntoState(m);
+  await refreshMapPicker();
+  toast("Создана карта из шаблона");
+};
+
+el("btnAddNode").onclick = ()=>{
+  const w = worldFromScreen({x: cv.clientWidth/2, y: cv.clientHeight/2});
+  const n = makeNode({x:w.x, y:w.y});
+  if(state.map.sector_mode === "36"){
+    n.layer = (state.map.layer_mode !== "all") ? state.map.layer_mode : "state";
+  }
+  state.map.nodes.push(n);
+  // guard на лету (на случай будущих правок)
+  TERA_GUARD.checkNode?.(n);
+  state.selectedId = n.id;
+  updateMapMeta();
+  dbPutMap(state.map);
+  toast("Node добавлен");
+  refreshUI();
+  draw();
+};
+
+el("btnLinkMode").onclick = ()=>{
+  if(!state.selectedId){ toast("Сначала выбери 1-й узел"); return; }
+  state.linkMode = {from: state.selectedId};
+  toast("Выбери 2-й узел для связи");
+};
+
+el("btnShowEdges").onclick = ()=>{
+  state.showEdgesAlways = !state.showEdgesAlways;
+  toast(state.showEdgesAlways ? "Связи: показывать всегда" : "Связи: показывать по выбранному узлу");
+  draw();
+};
+
+el("mapPicker").onchange = async ()=>{
+  const id = el("mapPicker").value;
+  const m = await dbGetMap(id);
+  if(m) await loadMapIntoState(m);
+};
+
+el("btnNewMap").onclick = async ()=>{
+  const m = newMap();
+  await dbPutMap(m);
+  await loadMapIntoState(m);
+  await refreshMapPicker();
+  toast("Новая карта создана");
+};
+
+el("btnDeleteMap").onclick = async ()=>{
+  if(!state.currentMapId) return;
+  if(!confirm("Удалить текущую карту?")) return;
+  await dbDeleteMap(state.currentMapId);
+  const maps = await dbListMaps();
+  if(maps[0]) await loadMapIntoState(maps[0]);
+  else {
+    const m = newMap();
+    await dbPutMap(m);
+    await loadMapIntoState(m);
+  }
+  await refreshMapPicker();
+  toast("Карта удалена");
+};
+
+/* ==============================
+   Legend + top
+============================== */
+function refreshLegend(){
+  const box = el("legend");
+  if(state.pureMode){
+    box.innerHTML = "";
+    return;
+  }
+  const mode = state.map.sector_mode;
+  let html = `<div class="hint">`;
+  html += `<div><span class="k">Функции:</span> режим ${mode}</div>`;
+  if(mode==="36"){
+    html += `<div style="margin-top:6px"><span class="k">Слои:</span> ${LAYERS.map(l=>`${LAYER_MARK[l]} ${l}`).join("  ")}</div>`;
+  }
+  html += `<div style="margin-top:6px"><span class="k">Evidence:</span> ${EVID_MARK.hypothesis} hypothesis, ${EVID_MARK.claim} claim</div>`;
+  html += `<div style="margin-top:6px"><span class="k">Сомнение:</span> метка "unc"</div>`;
+  html += `</div>`;
+  box.innerHTML = html;
+}
+
+function refreshTop(){
+  el("topMode").textContent = state.map.sector_mode;
+  el("topLayer").textContent = state.map.layer_mode;
+  el("topNodes").textContent = String(state.map.nodes.length);
+  el("topEdges").textContent = String(state.map.edges.filter(e=>!e.deleted_at).length);
+  el("topSel").textContent = state.selectedId ? state.selectedId.slice(0,8) : "—";
+}
+
+function refreshUI(){
+  el("mapTitle").value = state.map.title || "TERA карта";
+  el("modeLbl").textContent = state.map.sector_mode;
+  el("layerLbl").textContent = state.map.layer_mode;
+
+  const is36 = state.map.sector_mode === "36";
+  for(const id of ["btnLayerAll","btnLayerState","btnLayerInfo","btnLayerAction"]){
+    el(id).style.opacity = is36 ? "1" : ".45";
+  }
+
+  el("btnMode4").classList.toggle("primary", state.map.sector_mode==="4");
+  el("btnMode12").classList.toggle("primary", state.map.sector_mode==="12");
+  el("btnMode36").classList.toggle("primary", state.map.sector_mode==="36");
+
+  // В чистом режиме отключаем онбординг визуально (но кнопка может оставаться)
+  el("btnOnboarding").style.opacity = state.pureMode ? ".45" : "1";
+
+  refreshLegend();
+  refreshTop();
+  renderEditor();
+}
+
+/* ==============================
+   Editor
+============================== */
+function renderFuncOptions(){
+  const sel = el("nFunc");
+  sel.innerHTML = "";
+  if(state.map.sector_mode === "4"){
+    FUNCTION_GROUPS_4.forEach((g,i)=>{
+      const opt = document.createElement("option");
+      opt.value = String(i+1);
+      opt.textContent = `${i+1}. ${g.name}`;
+      sel.appendChild(opt);
+    });
+  }else{
+    FUNCTION_NAMES_12.forEach((name, idx)=>{
+      const opt = document.createElement("option");
+      opt.value = String(idx+1);
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+  }
+}
+
+function renderSources(n){
+  const box = el("sourcesList");
+  box.innerHTML = "";
+  if(!n.sources?.length){
+    box.innerHTML = `<div class="item"><div class="meta">Нет источников (это допустимо)</div></div>`;
+    return;
+  }
+  n.sources.forEach((s, i)=>{
+    const div = document.createElement("div");
+    div.className = "item";
+    const safeUrl = (s.url||"").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    div.innerHTML = `
+      <strong>${i+1}. <span class="mono">${s.format}</span></strong>
+      <div class="meta">${s.note ? s.note : ""}</div>
+      <div class="meta"><a href="${safeUrl}" target="_blank" rel="noopener">посмотреть источник</a> <span class="k">· вне TERA</span></div>
+      <div class="row" style="margin-top:6px">
+        <button data-del="${i}" class="danger">Удалить</button>
+      </div>
+    `;
+    div.querySelector("button[data-del]").onclick = async ()=>{
+      n.sources.splice(i,1);
+      n.updated_at = nowIso();
+      updateMapMeta();
+      await dbPutMap(state.map);
+      renderSources(n);
+      draw();
+      refreshTop();
+    };
+    box.appendChild(div);
+  });
+}
+
+function renderEditor(){
+  renderFuncOptions();
+
+  const g = el("editorGroup");
+  const n = state.selectedId ? getNode(state.selectedId) : null;
+  if(!n){ g.style.display="none"; return; }
+  g.style.display="block";
+
+  el("nodeIdLbl").textContent = n.id.slice(0,8);
+
+  el("nTitle").value = n.title || "";
+  el("nSynopsis").value = n.synopsis || "";
+  el("nFunc").value = String(n.function_id || 1);
+  el("nLayer").value = n.layer || "";
+  el("nEvidence").value = n.evidence_level || "hypothesis";
+  el("nUnc").value = String(!!n.uncertainty_mark);
+
+  el("nLayer").disabled = (state.map.sector_mode !== "36");
+  el("nLayer").style.opacity = (state.map.sector_mode === "36") ? "1" : ".5";
+
+  renderSources(n);
+
+  el("nTitle").oninput = ()=>{
+    n.title = el("nTitle").value;
+    n.updated_at = nowIso();
+    updateMapMeta(); dbPutMap(state.map); draw();
+  };
+  el("nSynopsis").oninput = ()=>{
+    n.synopsis = el("nSynopsis").value;
+    n.updated_at = nowIso();
+    updateMapMeta(); dbPutMap(state.map);
+  };
+  el("nFunc").onchange = ()=>{
+    n.function_id = Number(el("nFunc").value);
+    n.updated_at = nowIso();
+    updateMapMeta(); dbPutMap(state.map); draw();
+  };
+  el("nLayer").onchange = ()=>{
+    n.layer = el("nLayer").value;
+    n.updated_at = nowIso();
+    updateMapMeta(); dbPutMap(state.map); draw();
+  };
+  el("nEvidence").onchange = ()=>{
+    n.evidence_level = el("nEvidence").value;
+    n.updated_at = nowIso();
+    updateMapMeta(); dbPutMap(state.map); draw();
+  };
+  el("nUnc").onchange = ()=>{
+    n.uncertainty_mark = (el("nUnc").value === "true");
+    n.updated_at = nowIso();
+    updateMapMeta(); dbPutMap(state.map); draw();
+  };
+
+  el("btnAddSource").onclick = async ()=>{
+    const url = el("sUrl").value.trim();
+    const fmt = el("sFmt").value;
+    const note = el("sNote").value.trim();
+    if(!url){ toast("Нужен URL"); return; }
+    if(!/^https?:\/\//i.test(url)){ toast("URL должен начинаться с http(s)://"); return; }
+    if(!SOURCE_FORMATS.includes(fmt)){ toast("Неверный формат"); return; }
+    n.sources.push({url, format: fmt, note});
+    n.updated_at = nowIso();
+    updateMapMeta();
+    await dbPutMap(state.map);
+    el("sUrl").value=""; el("sNote").value="";
+    renderSources(n);
+    draw(); refreshTop();
+  };
+
+  el("btnDeleteNode").onclick = async ()=>{
+    if(!confirm("Удалить узел и связанные с ним связи?")) return;
+    const id = n.id;
+    state.map.nodes = state.map.nodes.filter(x=>x.id!==id);
+    for(const e of state.map.edges){
+      if(e.deleted_at) continue;
+      if(e.a===id || e.b===id){
+        deleteEdge(e.id, "");
+      }
+    }
+    state.selectedId = null;
+    state.linkMode = null;
+    updateMapMeta();
+    await dbPutMap(state.map);
+    toast("Узел удалён");
+    refreshUI();
+    draw();
+  };
+
+  el("btnEdgeHistory").onclick = ()=>{
+    const related = state.map.edges.filter(e => (e.a===n.id || e.b===n.id));
+    if(!related.length){ alert("У узла нет истории связей."); return; }
+    let txt = `История связей узла "${n.title}":\n\n`;
+    for(const e of related){
+      const otherId = (e.a===n.id)? e.b : e.a;
+      const other = getNode(otherId);
+      txt += `— c узлом "${other?.title || otherId}"\n`;
+      for(const h of (e.history||[])){
+        txt += `   • ${h.action} | ${h.at} | ${h.by || "—"}\n`;
+      }
+      if(e.deleted_at) txt += `   (удалена)\n`;
+      txt += "\n";
+    }
+    alert(txt);
+  };
+}
+
+/* ==============================
+   Geometry / drawing
+============================== */
+function worldToScreen(p){
+  const r = cv.getBoundingClientRect();
+  const W = r.width, H = r.height;
+  return { x: (p.x - state.view.cx) * state.view.s + W/2, y: (p.y - state.view.cy) * state.view.s + H/2 };
+}
+function worldFromScreen(p){
+  const r = cv.getBoundingClientRect();
+  const W = r.width, H = r.height;
+  return { x: (p.x - W/2) / state.view.s + state.view.cx, y: (p.y - H/2) / state.view.s + state.view.cy };
+}
+function sectorCount(){ return state.map.sector_mode === "4" ? 4 : 12; }
+
+function functionToSectorIndex(fid){
+  if(state.map.sector_mode === "4"){
+    if(fid>=1 && fid<=4) return fid-1;
+    for(let i=0;i<4;i++){
+      if(FUNCTION_GROUPS_4[i].funcs.includes(fid)) return i;
+    }
+    return 0;
+  }
+  return clamp(fid,1,12)-1;
+}
+
+function filteredNodes(){
+  if(state.map.sector_mode !== "36") return state.map.nodes;
+  const lm = state.map.layer_mode;
+  if(lm === "all") return state.map.nodes;
+  return state.map.nodes.filter(n => (n.layer || "") === lm);
+}
+
+function draw(){
+  const dpr = devicePixelRatio || 1;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+
+  const r = cv.getBoundingClientRect();
+  const W = r.width, H = r.height;
+  ctx.clearRect(0,0,W,H);
+  if (state.map && state.map.nodes.length === 0) {
+  ctx.save();
+  ctx.fillStyle = "rgba(180,180,180,0.5)";
+  ctx.font = "16px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillText(
+    "Карта пуста. Нажми «+ Node», чтобы добавить узел.",
+    canvas.width / 2,
+    canvas.height / 2
+  );
+  ctx.restore();
+}
+
+  ctx.fillStyle = "#0f1216";
+  ctx.fillRect(0,0,W,H);
+
+  const cx = W/2, cy = H/2;
+  const R = Math.min(W,H)*0.34;
+  const Rin = R*0.45;
+  const nSectors = sectorCount();
+  const startAng = -Math.PI/2;
+
+  // ring
+  ctx.save();
+  ctx.strokeStyle = "rgba(154,166,178,.18)";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx,cy,R,0,Math.PI*2);
+  ctx.arc(cx,cy,Rin,0,Math.PI*2);
+  ctx.stroke();
+
+  for(let i=0;i<nSectors;i++){
+    const a = startAng + i*(Math.PI*2/nSectors);
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a)*Rin, cy + Math.sin(a)*Rin);
+    ctx.lineTo(cx + Math.cos(a)*R,  cy + Math.sin(a)*R);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // subtle fill (NO semantic density)
+  for(let i=0;i<nSectors;i++){
+    const a0 = startAng + i*(Math.PI*2/nSectors);
+    const a1 = startAng + (i+1)*(Math.PI*2/nSectors);
+    const alpha = 0.02; // intentionally fixed: NOT importance / NOT recommendation
+    ctx.fillStyle = `rgba(200,220,255,${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a0)*Rin, cy + Math.sin(a0)*Rin);
+    ctx.arc(cx,cy,R,a0,a1);
+    ctx.lineTo(cx + Math.cos(a1)*Rin, cy + Math.sin(a1)*Rin);
+    ctx.arc(cx,cy,Rin,a1,a0,true);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  drawEdges();
+
+  const nodes = filteredNodes();
+  for(const n of nodes){
+    drawNode(n);
+  }
+
+  if(state.linkMode){
+    ctx.save();
+    ctx.fillStyle = "rgba(200,220,255,.85)";
+    ctx.font = "12px system-ui";
+    ctx.fillText("Режим связи: выбери 2-й узел", 12, H-12);
+    ctx.restore();
+  }
+
+  refreshTop();
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  const rr = Math.min(r, w/2, h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.arcTo(x+w, y, x+w, y+h, rr);
+  ctx.arcTo(x+w, y+h, x, y+h, rr);
+  ctx.arcTo(x, y+h, x, y, rr);
+  ctx.arcTo(x, y, x+w, y, rr);
+  ctx.closePath();
+}
+
+function trimTo(s, n){ s = String(s||""); return s.length <= n ? s : s.slice(0, n-1) + "…"; }
+
+function drawNode(n){
+  const p = worldToScreen(n.position);
+  const w = 170, h = 54;
+  const x = p.x - w/2;
+  const y = p.y - h/2;
+
+  const selected = (state.selectedId === n.id);
+  const alpha = selected ? 0.22 : 0.12;
+
+  ctx.save();
+  ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+  ctx.strokeStyle = selected ? "rgba(200,220,255,.55)" : "rgba(255,255,255,.14)";
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, w, h, 12);
+  ctx.fill();
+  ctx.stroke();
+
+  const fid = n.function_id || 1;
+  const fmark = String(fid).padStart(2,"0");
+  const lmark = (state.map.sector_mode==="36" && n.layer) ? (LAYER_MARK[n.layer] || "◌") : "";
+  const emark = EVID_MARK[n.evidence_level] || "?";
+  const unc = n.uncertainty_mark ? "unc" : "";
+  const srcCount = (n.sources?.length || 0);
+
+  ctx.fillStyle = "rgba(154,166,178,.95)";
+  ctx.font = "12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  ctx.fillText(`${fmark}${lmark} ${emark} ${unc}`.trim(), x+10, y+16);
+
+  ctx.fillStyle = "rgba(231,237,245,.95)";
+  ctx.font = "13px system-ui";
+  ctx.fillText(trimTo(n.title || "—", 22), x+10, y+34);
+
+  ctx.fillStyle = "rgba(154,166,178,.9)";
+  ctx.font = "12px system-ui";
+  ctx.fillText(`src:${srcCount}`, x+w-54, y+16);
+
+  ctx.restore();
+}
+
+function drawEdges(){
+  const show = state.showEdgesAlways || !!state.selectedId;
+  if(!show) return;
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(154,166,178,.35)";
+  ctx.lineWidth = 1.2;
+
+  const nodesById = new Map(state.map.nodes.map(n=>[n.id,n]));
+  for(const e of state.map.edges){
+    if(e.deleted_at) continue;
+    const a = nodesById.get(e.a);
+    const b = nodesById.get(e.b);
+    if(!a || !b) continue;
+
+    if(state.map.sector_mode==="36" && state.map.layer_mode!=="all"){
+      if((a.layer||"")!==state.map.layer_mode) continue;
+      if((b.layer||"")!==state.map.layer_mode) continue;
+    }
+    if(!state.showEdgesAlways && state.selectedId){
+      if(e.a !== state.selectedId && e.b !== state.selectedId) continue;
+    }
+
+    const pa = worldToScreen(a.position);
+    const pb = worldToScreen(b.position);
+
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* ==============================
+   Hit testing: nodes + edges
+============================== */
+function hitNode(screenX, screenY){
+  const nodes = filteredNodes();
+  for(let i=nodes.length-1;i>=0;i--){
+    const n = nodes[i];
+    const p = worldToScreen(n.position);
+    const w = 170, h = 54;
+    if(screenX >= p.x-w/2 && screenX <= p.x+w/2 && screenY >= p.y-h/2 && screenY <= p.y+h/2){
+      return n;
+    }
+  }
+  return null;
+}
+
+function distPointToSegment(px, py, ax, ay, bx, by){
+  const dx = bx-ax, dy = by-ay;
+  const len2 = dx*dx + dy*dy;
+  if(len2 === 0) return Math.hypot(px-ax, py-ay);
+  let t = ((px-ax)*dx + (py-ay)*dy) / len2;
+  t = clamp(t, 0, 1);
+  const cx = ax + t*dx, cy = ay + t*dy;
+  return Math.hypot(px-cx, py-cy);
+}
+
+function hitEdge(screenX, screenY){
+  if(!state.showEdgesAlways && !state.selectedId) return null;
+  const nodesById = new Map(state.map.nodes.map(n=>[n.id,n]));
+  const tol = 6; // px
+
+  for(const e of state.map.edges){
+    if(e.deleted_at) continue;
+
+    const a = nodesById.get(e.a);
+    const b = nodesById.get(e.b);
+    if(!a || !b) continue;
+
+    if(state.map.sector_mode==="36" && state.map.layer_mode!=="all"){
+      if((a.layer||"")!==state.map.layer_mode) continue;
+      if((b.layer||"")!==state.map.layer_mode) continue;
+    }
+    if(!state.showEdgesAlways && state.selectedId){
+      if(e.a !== state.selectedId && e.b !== state.selectedId) continue;
+    }
+
+    const pa = worldToScreen(a.position);
+    const pb = worldToScreen(b.position);
+    const d = distPointToSegment(screenX, screenY, pa.x, pa.y, pb.x, pb.y);
+    if(d <= tol) return e;
+  }
+  return null;
+}
+
+/* ==============================
+   Interaction
+============================== */
+cv.addEventListener("mousedown", async (ev)=>{
+  const r = cv.getBoundingClientRect();
+  const x = ev.clientX - r.left;
+  const y = ev.clientY - r.top;
+
+  // edge delete (only when edges visible)
+  const hitE = hitEdge(x,y);
+  if(hitE){
+    if(confirm("Удалить связь? История сохранится.")){
+      deleteEdge(hitE.id, "");
+      updateMapMeta();
+      await dbPutMap(state.map);
+      toast("Связь удалена (soft-delete)");
+      draw();
+    }
+    return;
+  }
+
+  const hit = hitNode(x,y);
+  if(hit){
+    // link mode
+    if(state.linkMode && hit.id !== state.linkMode.from){
+      addEdge(state.linkMode.from, hit.id, "");
+      state.linkMode = null;
+      updateMapMeta();
+      await dbPutMap(state.map);
+      toast("Связь создана");
+      draw();
+      return;
+    }
+
+    state.selectedId = hit.id;
+    state.drag.active = true;
+    state.drag.id = hit.id;
+    const wp = worldFromScreen({x,y});
+    state.drag.dx = (hit.position.x - wp.x);
+    state.drag.dy = (hit.position.y - wp.y);
+    renderEditor();
+    draw();
+    return;
+  }
+
+  // empty click: deselect + cancel link mode
+  state.selectedId = null;
+  state.linkMode = null;
+  state.drag.active = true;
+  state.drag.id = null; // pan
+  state.drag.dx = x;
+  state.drag.dy = y;
+  renderEditor();
+  draw();
+});
+
+cv.addEventListener("mousemove", (ev)=>{
+  if(!state.drag.active) return;
+  const r = cv.getBoundingClientRect();
+  const x = ev.clientX - r.left;
+  const y = ev.clientY - r.top;
+
+  if(state.drag.id){
+    const n = getNode(state.drag.id);
+    if(!n) return;
+    const wp = worldFromScreen({x,y});
+    n.position.x = wp.x + state.drag.dx;
+    n.position.y = wp.y + state.drag.dy;
+    n.updated_at = nowIso();
+    updateMapMeta();
+    draw();
+  }else{
+    const dx = x - state.drag.dx;
+    const dy = y - state.drag.dy;
+    state.drag.dx = x;
+    state.drag.dy = y;
+    state.view.cx -= dx / state.view.s;
+    state.view.cy -= dy / state.view.s;
+    draw();
+  }
+});
+
+cv.addEventListener("mouseup", ()=>{
+  if(state.drag.active){
+    state.drag.active = false;
+    dbPutMap(state.map);
+  }
+});
+
+cv.addEventListener("mouseleave", ()=>{
+  if(state.drag.active){
+    state.drag.active = false;
+    dbPutMap(state.map);
+  }
+});
+
+cv.addEventListener("wheel", (ev)=>{
+  ev.preventDefault();
+  const r = cv.getBoundingClientRect();
+  const mx = ev.clientX - r.left;
+  const my = ev.clientY - r.top;
+
+  const before = worldFromScreen({x:mx,y:my});
+  const delta = -ev.deltaY;
+  const factor = (delta > 0) ? 1.08 : 0.92;
+  state.view.s = clamp(state.view.s * factor, 0.25, 2.8);
+  const after = worldFromScreen({x:mx,y:my});
+  state.view.cx += (before.x - after.x);
+  state.view.cy += (before.y - after.y);
+  draw();
+}, {passive:false});
+
+document.addEventListener("keydown", (ev)=>{
+  if(ev.key === "Escape"){
+    state.linkMode = null;
+    toast("Отмена");
+    draw();
+  }
+});
+
+/* ==============================
+   Onboarding
+============================== */
+const ONB = [
+  { t: "1) Видеть поле (1–2 минуты)\n\nПосмотри: где пусто? где перегруз?\nTERA не даёт ответов — она показывает карту." },
+  { t: "2) Масштаб (1–2 минуты)\n\nПереключи 4 → 12 → 36.\nВ 36 выбирай слой: state / info / action." },
+  { t: "3) Узел (2 минуты)\n\nСоздай Node.\nЗаполни title + synopsis.\nВыбери функцию." },
+  { t: "4) Источники (2 минуты)\n\nДобавь 1–2 источника.\nИсточник вне TERA.\nКарта сохраняет ориентацию." },
+  { t: "5) Связи (2–3 минуты)\n\nСвяжи 2 узла.\nВключи показ связей.\nУдаляй связь кликом по линии (история останется)." }
+];
+
+// Guard для онбординга (чтобы не появлялся «голос системы»)
+TERA_GUARD.checkOnboarding(ONB);
+
+let onbIdx = 0;
+function onbRender(){
+  el("onbText").textContent = ONB[onbIdx].t;
+  el("onbStep").textContent = String(onbIdx+1);
+}
+function onbOpen(){
+  if(state.pureMode) return;
+  el("onb").style.display = "block";
+  onbIdx = 0;
+  onbRender();
+}
+function onbClose(){ el("onb").style.display = "none"; }
+
+el("btnOnboarding").onclick = onbOpen;
+el("onbPrev").onclick = ()=>{ onbIdx = Math.max(0, onbIdx-1); onbRender(); };
+el("onbNext").onclick = ()=>{ onbIdx = Math.min(ONB.length-1, onbIdx+1); onbRender(); };
+el("onbClose").onclick = onbClose;
+
+/* ==============================
+   Init
+============================== */
+(async function init(){
+  resize();
+  const maps = await dbListMaps();
+  if(maps[0]){
+    await loadMapIntoState(maps[0]);
+  }else{
+    const m = newMap();
+    await dbPutMap(m);
+    await loadMapIntoState(m);
+  }
+  await refreshMapPicker();
+  refreshUI();
+  draw();
+  toast("Готово: выбери масштаб → добавь Node → различай функции");
+})();
+<script src="tera_app.js"></script>
+</body>
+</html>
